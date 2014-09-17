@@ -1,19 +1,55 @@
 module ActiveSparql
+  # = ActiveSparql::Simple
+  #
+  # Provides a more abstract way of defining semantic models.
+  #
+  # Subclass this class
+  #
+  # Specify the URI of this class by setting
+  #
+  #    @class_uri = 'http://my.class/uri
+  #
+  # Specify predicates by specifying the name and maybe some extras:
+  #
+  #    pred :name, 'http://xmlns.com/foaf/0.1/name'
+  #
+  # You can specify a longer path.  If this is a book resource, the
+  # author could be referred to as:
+  #
+  #    pred :author_name, ['http://test/author','http://xmlns.com/foaf/0.1/name']
+  #
+  # has_one links are also supported.  You can (optionally) specify
+  # the class of the linked resource, and you can specify the link as
+  # you did before.
+  #
+  #    has_one :extractor, "http://didicat.semte.ch/v0.1/extractor", class: :information_extractor
+  #
   class Simple < Base
 
+    # The URL of the object is published, so others can use it as an
+    # identifier
     attr_accessor :url
+
+    # This is a default namespace for objects from
+    # ActiveSparql::Simple
     @class_uri = "http://active-sparql.semte.ch/v0.1/simple"
+
+    # Contains the specification of all variables as specified by ```self.pred```.
     @variables = {}
+    # Contains the specification of all the has_one links as specified by ```self.has_one```.
     @has_one_links = {}
 
+    # Retrieves the specification of the variables specified in this class.
     def self.variables
       @variables ||= {}
     end
 
+    # Retrieves the specification of all the has_one links specified in this class.
     def self.has_one_links
       @has_one_links ||= {}
     end
 
+    # Loads this object and all its has_one links.
     def self.load( *args )
       result = super( *args )
       has_one_links.each do |pred,options|
@@ -24,6 +60,7 @@ module ActiveSparql
       result
     end
 
+    # Returns the uri of this class.
     def self.class_uri
       @class_uri
     end
@@ -42,6 +79,9 @@ module ActiveSparql
       attr_accessor sym.to_sym
     end
 
+    # Defines a has_one link.
+    # eg: has_one :combinator, "http://didicat.semte.ch/v0.1/combinator"
+    #     has_one :filter, ["http://didicat.semte.ch/v0.1/filter"], class: :node_filter
     def self.has_one( attr_name, predicates, options={} )
       attr_name = attr_name.to_sym
       options[:class] ||= attr_name.to_sym
@@ -133,6 +173,7 @@ SPARQL
       graph
     end
 
+    # Fetchas the triples belonging to this object.
     def fetch_object_triples
       Db.query(klass.object_graph) do
 <<SPARQL
@@ -147,10 +188,15 @@ SPARQL
 
   private
 
+    # Returns a string containing standardised variable names for all
+    # sparql predicate variables.
     def self.sparql_pred_variables
       (self.variables.keys + self.has_one_links.keys).map{ |k| "?#{k.to_s}" }.join(" ")
     end
 
+    # Returns the portion of the sparql query which describes the
+    # paths to all sparql predicates.  Can be injected directly into
+    # the where clause.
     def self.sparql_pred_paths
       pred_paths = []
       variables = self.variables.each do |k,v|
@@ -163,6 +209,9 @@ SPARQL
       pred_paths
     end
 
+    # Predicates may consist of multiple unions.  This method returns
+    # a list containing all unions for the paths (making sure we can
+    # fetch all data).
     def self.union_pred_paths
       sparql_pred_paths.collect do |path|
         "UNION { #{path} }"
